@@ -49,8 +49,35 @@ const DoctorSignup = () => {
     console.log("Doctor form submitted:", data);
 
     try {
-      // TODO: Send to Google Sheets via edge function
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Import supabase client
+      const { supabase } = await import("@/integrations/supabase/client");
+      
+      // Save to database
+      const { error: dbError } = await supabase
+        .from("doctors")
+        .insert([{
+          first_name: data.firstName,
+          last_name: data.lastName,
+          email: data.email,
+          phone: data.phone,
+          language: data.language,
+          address: data.address,
+          specialty: data.specialty,
+        }]);
+
+      if (dbError) throw dbError;
+
+      // Send to Google Sheets via edge function
+      const { error: sheetsError } = await supabase.functions.invoke("sync-to-sheets", {
+        body: { 
+          type: "doctor",
+          data: data 
+        },
+      });
+
+      if (sheetsError) {
+        console.error("Failed to sync to Google Sheets:", sheetsError);
+      }
       
       toast({
         title: "Registration Successful!",
@@ -59,6 +86,7 @@ const DoctorSignup = () => {
       
       setTimeout(() => navigate("/"), 2000);
     } catch (error) {
+      console.error("Registration error:", error);
       toast({
         title: "Error",
         description: "Failed to submit registration. Please try again.",
