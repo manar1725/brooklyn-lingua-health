@@ -1,9 +1,9 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+const SPREADSHEET_ID = '1sPUBovCVRM54rVXfcEs5UV0A5k0HwtXyZwux9N-0hqE';
 
 interface PatientData {
   firstName: string;
@@ -42,17 +42,53 @@ Deno.serve(async (req) => {
       );
     }
 
-    // TODO: Implement Google Sheets API integration
-    // For now, just log the data
-    // You'll need to:
-    // 1. Create a Google Sheets spreadsheet
-    // 2. Get the spreadsheet ID
-    // 3. Use the Google Sheets API to append data
-    // Example endpoint: https://sheets.googleapis.com/v4/spreadsheets/{spreadsheetId}/values/{range}:append
+    // Determine sheet name and prepare row data
+    const sheetName = type === 'patient' ? 'Patients' : 'Doctors';
+    let values: string[][];
     
-    console.log('Data would be synced to Google Sheets here');
-    console.log('Type:', type);
-    console.log('Data:', JSON.stringify(data, null, 2));
+    if (type === 'patient') {
+      const patientData = data as PatientData;
+      values = [[
+        patientData.firstName,
+        patientData.lastName,
+        patientData.email,
+        patientData.phone,
+        patientData.language
+      ]];
+    } else {
+      const doctorData = data as DoctorData;
+      values = [[
+        doctorData.firstName,
+        doctorData.lastName,
+        doctorData.email,
+        doctorData.phone,
+        doctorData.address,
+        doctorData.specialty,
+        doctorData.language
+      ]];
+    }
+
+    // Append data to Google Sheets
+    const sheetsUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${sheetName}!A:Z:append?valueInputOption=RAW&key=${apiKey}`;
+    
+    console.log(`Syncing ${type} data to Google Sheets tab: ${sheetName}`);
+    
+    const sheetsResponse = await fetch(sheetsUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ values }),
+    });
+
+    if (!sheetsResponse.ok) {
+      const errorText = await sheetsResponse.text();
+      console.error('Google Sheets API error:', errorText);
+      throw new Error(`Google Sheets API error: ${errorText}`);
+    }
+
+    const sheetsResult = await sheetsResponse.json();
+    console.log('Successfully synced to Google Sheets:', sheetsResult);
 
     return new Response(
       JSON.stringify({ 
